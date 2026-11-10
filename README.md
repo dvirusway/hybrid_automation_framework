@@ -30,16 +30,25 @@ A scalable, hybrid test automation framework built on **Playwright**, written in
 ├── config/
 │   └── <testdata>.js              # Test data and environment config
 ├── src/
+│   ├── api/
+│   │   ├── api-client.ts          # Typed Playwright API request wrapper
+│   │   └── api-assertions.ts      # Status and JSON response helpers
+│   ├── config/
+│   │   └── environment.ts         # Validated environment-specific settings
 │   ├── specs/
-│   │   └── <testfile>.spec.ts     # Test specifications
+│   │   ├── <testfile>.spec.ts     # Test specifications
+│   │   ├── api.spec.ts            # API client example using a local test server
+│   │   └── utils.spec.ts          # Shared utility examples
 │   ├── page/
 │   │   └── <pageclass>.page.ts    # Page objects (locators + page methods)
 │   ├── action/
 │   │   └── <stepclass>.action.ts  # Step classes (business flows)
-│   ├── fixture/                   # Custom Playwright fixtures
-│   ├── utils/                     # Helper and common utilities
+│   ├── fixture/
+│   │   └── index.ts               # UI action and API client fixtures
+│   ├── utils/                     # Data, date, file, logging and polling helpers
 │   └── support/
-│       └── auth/                  # Authentication and session setup
+│       ├── auth/                  # Authentication and session setup
+│       └── testing/               # Local test services and test-only helpers
 ├── playwright.config.ts           # Playwright configuration
 ├── package.json
 └── README.md
@@ -54,7 +63,8 @@ A scalable, hybrid test automation framework built on **Playwright**, written in
 | Page | `src/page/<pageclass>.page.ts` | Locators and low-level page interactions |
 | Action | `src/action/<stepclass>.action.ts` | Business steps built from page methods |
 | Fixture | `src/fixture/` | Create and inject pages, actions and test data into tests |
-| Utils | `src/utils/` | Generic helpers (random data, date, file, API, logger) |
+| API | `src/api/` | Typed requests and reusable response parsing/assertion helpers |
+| Utils | `src/utils/` | Generic helpers (random data, date, file, polling, logger) |
 | Support | `src/support/auth/` | Login, storage state and other setup helpers |
 
 ### How the layers connect
@@ -90,6 +100,12 @@ npm test
 # Run a single spec
 npm run test:google-search
 
+# Run API examples (uses an in-process local HTTP server)
+npm run test:api
+
+# Run utility examples
+npm run test:utils
+
 # Run in headed mode
 npm run test:headed
 
@@ -120,6 +136,61 @@ npx playwright show-report
 ```
 
 Traces, screenshots and videos are captured on failure (configurable in `playwright.config.ts`).
+
+## API tests
+
+The `apiClient` fixture wraps Playwright's `APIRequestContext` and provides
+typed `get`, `post`, `put`, `patch`, `delete`, and `head` methods. Paths are
+resolved relative to `API_BASE_URL`; request options such as headers, query
+parameters, timeouts, and abort signals are forwarded to Playwright.
+`expectStatus` gives failures the status, URL, and response body, while
+`readJson<T>` checks the response content type before parsing the body.
+
+```ts
+import { expect, test } from '../fixture';
+import { expectStatus, readJson } from '../api/api-assertions';
+
+test('gets a user', async ({ apiClient }) => {
+  const response = await apiClient.get<{ id: number; name: string }>('/users/1');
+  await expectStatus(response, 200);
+  const user = await readJson<{ id: number; name: string }>(response);
+  expect(user.id).toBe(1);
+});
+```
+
+Set `API_BASE_URL` to point the fixture at the API under test. If it is not
+set, it defaults to JSONPlaceholder for quick-start examples. The checked-in
+API spec overrides the fixture with an in-process server, so API examples and
+utility checks run without an external service or network access.
+
+## Environment configuration
+
+The validated configuration reads these optional environment variables:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `UI_BASE_URL` | `https://www.google.com` | Base URL for browser tests |
+| `API_BASE_URL` | `https://jsonplaceholder.typicode.com` | API fixture base URL |
+| `API_TIMEOUT_MS` | `30000` | Playwright action and API request timeout |
+| `EXPECT_TIMEOUT_MS` | `5000` | Assertion timeout |
+| `PW_RETRIES` | `0` (or at least `2` in CI) | Test retry count |
+| `PW_WORKERS` | Playwright default | Parallel worker count |
+
+Invalid URLs, protocols, or numeric settings fail at startup with a clear
+configuration error. Keep credentials out of checked-in config files; use
+environment variables or your CI secret store for sensitive values.
+
+## Reusable utilities and authentication
+
+`src/utils/` includes structured scoped logging, secure random test data,
+calendar-aware date helpers, bounded polling, and JSON/text file operations.
+Helpers reject invalid input rather than silently substituting values.
+
+Authentication helpers in `src/support/auth/auth-state.ts` save browser
+storage state and create contexts from that state. Keep generated auth files
+out of version control; they can contain active credentials and cookies.
+Call `authStatePath(projectName)` to consistently name state files and
+`saveAuthState(context, path)` after a successful login.
 
 ## Examples
 
