@@ -1,0 +1,18 @@
+{
+  "name": "hybrid-automation-framework",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "test": "playwright test",
+    "test:google-search": "playwright test src/specs/google-search.spec.ts",
+    "test:headed": "playwright test --headed",
+    "report": "playwright show-report",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}
